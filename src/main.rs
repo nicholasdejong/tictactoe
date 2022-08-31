@@ -1,4 +1,4 @@
-use colored::{ColoredString, Colorize, control};
+use colored::{control, ColoredString, Colorize};
 use core::panic;
 use std::io;
 
@@ -15,12 +15,20 @@ enum Piece {
     Empty,
 }
 
+#[derive(Debug)]
+struct Root {
+    //end of the branch
+    score: isize,
+    index: usize,
+}
+
 #[allow(dead_code)]
+#[derive(Clone)]
 struct BoardState {
     row: [isize; 3],
     column: [isize; 3],
-    diagonal: [isize; 3],
-    cdiagonal: [isize; 3], //counter diagonal (opposite)
+    diagonal: isize,  //     \
+    cdiagonal: isize, //     /
 }
 
 fn init(turn: &Turn) -> GameState {
@@ -41,8 +49,8 @@ fn invert_turn(turn: &Turn) -> Turn {
 }
 fn coord_to_index(coord: String) -> usize {
     let letter = coord.chars().next().expect("Invalid coordinate provided");
-    let ch_number:char = coord.chars().nth(1).unwrap();
-    let number:usize = ch_number.to_digit(10).unwrap() as usize;
+    let ch_number: char = coord.chars().nth(1).unwrap();
+    let number: usize = ch_number.to_digit(10).unwrap() as usize;
     // println!("{} {}", letter, number);
     let converted: usize = match letter {
         'a' => 0,
@@ -53,6 +61,7 @@ fn coord_to_index(coord: String) -> usize {
     converted + number - 1
 }
 #[allow(dead_code)]
+#[derive(Clone)]
 struct GameState<'a> {
     moves: Vec<usize>,
     board: [Piece; 9],
@@ -74,8 +83,8 @@ impl GameState<'_> {
             state: BoardState {
                 row: [0; 3],
                 column: [0; 3],
-                diagonal: [0; 3],
-                cdiagonal: [0; 3],
+                diagonal: 0,
+                cdiagonal: 0,
             },
         };
     }
@@ -86,7 +95,7 @@ impl GameState<'_> {
             Piece::Naughts
         }
     }
-    fn apply(&mut self, turn: &Turn, position: usize) -> &Self {
+    fn apply(&mut self, turn: &Turn, position: &usize) -> &Self {
         //X is the maximizing player and O is the minimizing player
         let piece = self.get_piece(turn);
         let row = (position / 3) as usize;
@@ -96,20 +105,31 @@ impl GameState<'_> {
             Piece::Naughts => -1,
             _ => 0, //impossible, must either be naughts or crosses
         };
-        println!("{:?}, {:?}", self.state.row, self.state.column);
-        println!("{:?}", piece);
-        if self.board[position] == Piece::Empty {
-            self.board[position] = piece;
+        // println!("{:?}, {:?}", self.state.row, self.state.column);
+        // println!("{:?}", piece);
+        if self.board[*position] == Piece::Empty {
+            self.board[*position] = piece;
             self.state.row[row] += value;
             self.state.column[column] += value;
+            if position % 3 == (position / 3) as usize {
+                self.state.diagonal += value;
+            };
+            if 2 - (position % 3) == (position / 3) as usize {
+                self.state.cdiagonal += value;
+            }
             //self.moves = self.moves.iter().filter(|m:&usize| m != &position).collect();
-            self.moves.retain(|&m| m != position);
+            self.moves.retain(|&m| &m != position);
         } else {
             panic!(
                 "Invalid piece placement: {:?} (piece: {:?})",
                 self.board, piece
             );
         }
+        self
+    }
+    fn undo(&mut self, position: &usize) -> &Self {
+        self.board[*position] = Piece::Empty;
+        self.moves.push(*position);
         self
     }
 
@@ -132,28 +152,32 @@ impl GameState<'_> {
                 Piece::Empty => &space,
             })
             .collect();
-        print!("{}",
-            format!("
+        print!(
+            "{}",
+            format!(
+                "
           1   2   3     
         +---+---+---+
-      a | {} | {} | {} |    Tic-Tac-Toe by Nicholas
+      a | {} | {} | {} |    Tic-Tac-Toe
         +---+---+---+
       b | {} | {} | {} |    {}
         +---+---+---+
       c | {} | {} | {} |    {}
         +---+---+---+
         ",
-            colored[0],
-            colored[1],
-            colored[2],
-            colored[3],
-            colored[4],
-            colored[5],
-            format!("Green: You").bright_green(),
-            colored[6],
-            colored[7],
-            colored[8],
-            format!("Red: Computer").bright_red()).bright_cyan()
+                colored[0],
+                colored[1],
+                colored[2],
+                colored[3],
+                colored[4],
+                colored[5],
+                format!("Green: You").bright_green(),
+                colored[6],
+                colored[7],
+                colored[8],
+                format!("Red: Computer").bright_red()
+            )
+            .bright_cyan()
         )
         // let mut cln = String::new();
         // let mut char_list: Vec<char> = vec![];
@@ -178,8 +202,95 @@ impl GameState<'_> {
     //     if self.board
 
     // }
-    fn done(&self) -> bool {
+    fn winner(&self) -> Piece {
+        for row in self.state.row {
+            match row {
+                3 => return Piece::Crosses,
+                -3 => return Piece::Naughts,
+                _ => continue,
+            }
+        }
+        for col in self.state.column {
+            match col {
+                3 => return Piece::Crosses,
+                -3 => return Piece::Naughts,
+                _ => continue,
+            }
+        }
+        match self.state.diagonal {
+            3 => return Piece::Crosses,
+            -3 => return Piece::Naughts,
+            _ => {}
+        }
+        match self.state.cdiagonal {
+            3 => return Piece::Crosses,
+            -3 => return Piece::Naughts,
+            _ => {}
+        }
+        return Piece::Empty;
+    }
+    fn full(&self) -> bool {
         self.moves.len() == 0
+    }
+    fn minimax(&self, is_max: bool) -> Root {
+        // print!("Initial function call");
+        // self.print();
+        if self.full() || self.winner() != Piece::Empty {
+            // println!("{:?}", self.winner());
+            return Root {
+                score: match self.winner() {
+                    Piece::Crosses => 1,
+                    Piece::Naughts => -1,
+                    Piece::Empty => 0,
+                },
+                index: 9,
+            };
+        }
+        if is_max {
+            let mut best_move = 0usize;
+            let mut best_score = 0isize;
+            for current_move in &self.moves {
+                let mut new_state = self.clone();
+                new_state.apply(&new_state.crosses, &current_move);
+                // self.print();
+                // new_state.print();
+                // panic!("e");
+                let current_score = new_state.minimax(false).score;
+                if current_score > best_score {
+                    best_score = current_score;
+                    best_move = *current_move;
+                    // println!("New best: {}, {}", best_score, best_move);
+                }
+                new_state.undo(current_move);
+            }
+            // println!("res {}, {}", best_score, best_move);
+            return Root {
+                score: best_score,
+                index: best_move,
+            };
+        } else {
+            let mut best_move = 0usize;
+            let mut best_score = 0isize;
+            for current_move in &self.moves {
+                let mut new_state = self.clone();
+                new_state.apply(&new_state.crosses, &current_move);
+                // self.print();
+                // new_state.print();
+                // panic!("e");
+                let current_score = new_state.minimax(true).score;
+                if current_score < best_score {
+                    best_score = current_score;
+                    best_move = *current_move;
+                    // println!("New best: {}, {}", best_score, best_move);
+                }
+                new_state.undo(current_move);
+            }
+            // println!("res {}, {}", best_score, best_move);
+            return Root {
+                score: best_score,
+                index: best_move,
+            };
+        }
     }
 }
 
@@ -197,20 +308,25 @@ fn main() {
     };
 
     let mut state: GameState = init(&turn);
-    state.apply(&turn, 0);
+    state.apply(&turn, &0);
     // state.apply(&invert_turn(&turn), 1);
-    state.apply(&turn, 2);
+    // state.apply(&turn, &6);
     // state.apply(&invert_turn(&turn), 3);
-    state.apply(&turn, 4);
-    state.apply(&invert_turn(&turn), 5);
+    state.apply(&turn, &8);
+    state.apply(&invert_turn(&turn), &4);
     // state.apply(&turn, 6);
-    state.apply(&invert_turn(&turn), 7);
-    state.apply(&turn, 8);
+    // state.apply(&invert_turn(&turn), &7);
+    // state.apply(&turn, &8);
     state.print();
-    println!("{}", state.done());
-    ln = String::new();
-    io::stdin().read_line(&mut ln).expect("Failed to read line");
+    println!("{:?}", state.minimax(true));
+    // println!(
+    //     "{:?} {:?} {:?} {:?}",
+    //     state.state.row, state.state.column, state.state.diagonal, state.state.cdiagonal
+    // );
+    println!("{}", state.full());
+    // ln = String::new();
+    // io::stdin().read_line(&mut ln).expect("Failed to read line");
     // println!(":{}", ln);
-    println!("{}", coord_to_index(ln));
+    // println!("{}", coord_to_index(ln));
     // println!("{:?}, {:?}", state.moves, state.board);
 }
