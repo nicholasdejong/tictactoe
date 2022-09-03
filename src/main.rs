@@ -281,7 +281,7 @@ impl GameState<'_> {
             };
         }
         if is_max {
-            let mut best_move = 0usize;
+            let mut best_move: usize = 0;
             let mut best_score = -2isize;
             for current_move in &self.moves {
                 let mut new_state = self.clone();
@@ -353,8 +353,17 @@ fn main() {
         &Turn::Player => false,
         &Turn::Computer => true,
     };
+    let mut current_score:isize = 0;
     for _ in 0..9 {
+        print!("{esc}c", esc = 27 as char);
+        println!("Score: {}", match current_score {
+            1 => "X is winning",
+            0 => "Tie",
+            -1 => "O is winning",
+            _ => ""
+        });
         if state.winner() != Piece::Empty {
+            state.print();
             match state.winner() {
                 Piece::Crosses => {
                     println!("X wins!")
@@ -370,7 +379,7 @@ fn main() {
             let best = state.minimax(computer_is_max);
             state.apply(&Turn::Computer, &best.index);
             state.current_turn = Turn::Player;
-            println!("Score: {}", best.score);
+            current_score = best.score;
         } else {
             state.print();
             let moves: Vec<String> = state
