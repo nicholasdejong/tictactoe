@@ -1,5 +1,4 @@
 use colored::{control, ColoredString, Colorize};
-// use core::{panic};
 use std::io;
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -17,7 +16,6 @@ enum Piece {
 
 #[derive(Debug)]
 struct Root {
-    //end of the branch
     score: isize,
     index: usize,
 }
@@ -27,31 +25,17 @@ struct Root {
 struct BoardState {
     row: [isize; 3],
     column: [isize; 3],
-    diagonal: isize,  //     \
-    cdiagonal: isize, //     /
+    diagonal: isize,
+    cdiagonal: isize,
 }
 
 fn init(turn: &Turn) -> GameState {
     GameState::new(turn)
 }
-// fn piece_char(piece: &Piece) -> char {
-//     match piece {
-//         Piece::Crosses => 'X',
-//         Piece::Naughts => 'O',
-//         Piece::Empty => '#',
-//     }
-// }
-// fn invert_turn(turn: &Turn) -> Turn {
-//     match turn {
-//         Turn::Computer => Turn::Player,
-//         Turn::Player => Turn::Computer,
-//     }
-// }
 fn coord_to_index(coord: String) -> usize {
     let letter = coord.chars().next().expect("Invalid coordinate provided");
     let ch_number: char = coord.chars().nth(1).unwrap();
     let number: usize = ch_number.to_digit(10).unwrap() as usize;
-    // println!("{} {}", letter, number);
     let converted: usize = match letter {
         'a' => 0,
         'b' => 3,
@@ -80,14 +64,14 @@ struct GameState<'a> {
     moves: Vec<usize>,
     board: [Piece; 9],
     crosses: &'a Turn,
-    naughts: &'a Turn, //dead btw
+    naughts: &'a Turn,
     state: BoardState,
     current_turn: Turn,
 }
 
 impl GameState<'_> {
     fn new(turn: &Turn) -> GameState {
-        return GameState {
+        GameState {
             moves: vec![0, 1, 2, 3, 4, 5, 6, 7, 8],
             board: [Piece::Empty; 9],
             crosses: turn,
@@ -102,7 +86,7 @@ impl GameState<'_> {
                 cdiagonal: 0,
             },
             current_turn: *turn,
-        };
+        }
     }
     fn get_piece(&self, turn: &Turn) -> Piece {
         if self.crosses == turn {
@@ -112,17 +96,14 @@ impl GameState<'_> {
         }
     }
     fn apply(&mut self, turn: &Turn, position: &usize) -> &Self {
-        //X is the maximizing player and O is the minimizing player
         let piece = self.get_piece(turn);
         let row = (position / 3) as usize;
         let column = position % 3;
         let value = match self.get_piece(turn) {
             Piece::Crosses => 1,
             Piece::Naughts => -1,
-            _ => 0, //impossible, must either be naughts or crosses
+            _ => 0,
         };
-        // println!("{:?}, {:?}", self.state.row, self.state.column);
-        // println!("{:?}", piece);
         if self.board[*position] == Piece::Empty {
             self.board[*position] = piece;
             self.state.row[row] += value;
@@ -133,7 +114,6 @@ impl GameState<'_> {
             if 2 - (position % 3) == (position / 3) as usize {
                 self.state.cdiagonal += value;
             }
-            //self.moves = self.moves.iter().filter(|m:&usize| m != &position).collect();
             self.moves.retain(|&m| &m != position);
         } else {
             panic!(
@@ -213,29 +193,7 @@ impl GameState<'_> {
             )
             .bright_cyan()
         )
-        // let mut cln = String::new();
-        // let mut char_list: Vec<char> = vec![];
-        // for p in self.board {
-        //     char_list.push(piece_char(&p));
-        // }
-        // /*
-        // for ch in char_list {
-        //     println!("{}", ch);
-        // }
-        // */
-        // for cnt in 0..char_list.len() {
-        //     if cnt % 3 == 0 {
-        //         println!("{}", cln);
-        //         cln = String::new();
-        //     };
-        //     cln.push(char_list[cnt]);
-        // }
-        // println!("{}", cln);
     }
-    // fn determine_winner(&self) -> Side {
-    //     if self.board
-
-    // }
     fn winner(&self) -> Piece {
         for row in self.state.row {
             match row {
@@ -267,10 +225,7 @@ impl GameState<'_> {
         self.moves.len() == 0
     }
     fn minimax(&self, is_max: bool) -> Root {
-        // print!("Initial function call");
-        // self.print();
         if self.full() || self.winner() != Piece::Empty {
-            // println!("{:?}", self.winner());
             return Root {
                 score: *&match self.winner() {
                     Piece::Crosses => 1,
@@ -286,22 +241,14 @@ impl GameState<'_> {
             for current_move in &self.moves {
                 let mut new_state = self.clone();
                 new_state.apply(&new_state.crosses, &current_move);
-                // self.print();
-                // new_state.print();
-                // panic!("e");
                 let current_score = new_state.minimax(false).score;
                 if current_score > best_score {
                     best_score = current_score;
                     best_move = *current_move;
-                    // println!("New best: {}, {}", best_score, best_move);
                 }
                 new_state.undo(current_move);
-                // new_state.print();
-                // self.print();
                 assert_eq!(&new_state.state, &self.state);
-                // println!("{:?}", new_state.state)
             }
-            // println!("res {}, {}", best_score, best_move);
             return Root {
                 score: best_score,
                 index: best_move,
@@ -312,33 +259,24 @@ impl GameState<'_> {
             for current_move in &self.moves {
                 let mut new_state = self.clone();
                 new_state.apply(&new_state.naughts, &current_move);
-                // self.print();
-                // new_state.print();
-                // panic!("e");
                 let current_score = new_state.minimax(true).score;
                 if current_score < best_score {
                     best_score = current_score;
                     best_move = *current_move;
-                    // a = current_score;
-                    // b = *current_move;
-                    // println!("New best: {}, {}", best_score, best_move);
                 }
                 new_state.undo(current_move);
             }
-            // println!("res {}, {}", best_score, best_move);
             return Root {
                 score: best_score,
                 index: best_move,
             };
         }
-        // println!("{} {}", a, b);
     }
 }
 
 fn main() {
     let _enabled = control::set_virtual_terminal(true);
     let mut ln = String::new();
-    // println!("{}", format!("Test").green().on_blue());
     println!("Who should go first? Player or Computer? (p/c)");
     io::stdin().read_line(&mut ln).expect("Failed to read line");
 
@@ -386,29 +324,4 @@ fn main() {
             state.current_turn = Turn::Computer;
         }
     }
-    // state.apply(&turn, &0);
-    // state.apply(&invert_turn(&turn), &0);
-    // state.apply(&turn, &1);
-    // state.apply(&invert_turn(&turn), &1);
-    // state.apply(&turn, &2);
-    // state.apply(&invert_turn(&turn), &2);
-    // state.apply(&turn, &3);
-    // state.apply(&invert_turn(&turn), &3);
-    // state.apply(&turn, &4);
-    // state.apply(&invert_turn(&turn), &4);
-    // state.apply(&turn, &5);
-    // state.apply(&invert_turn(&turn), &5);
-    // state.apply(&turn, &6);
-    // state.apply(&invert_turn(&turn), &6);
-    // state.apply(&turn, &7);
-    // state.apply(&invert_turn(&turn), &7);
-    // state.apply(&turn, &8);
-    // state.apply(&invert_turn(&turn), &8);
-    // state.print();
-    // println!("{:?}", state.minimax(false));
-    // ln = String::new();
-    // io::stdin().read_line(&mut ln).expect("Failed to read line");
-    // println!(":{}", ln);
-    // println!("{}", coord_to_index(ln));
-    // println!("{:?}, {:?}", state.moves, state.board);
 }
